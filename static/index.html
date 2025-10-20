@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS Bedrock Model Tester</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+            font-size: 14px;
+        }
+
+        select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+
+        select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        select {
+            cursor: pointer;
+            background-color: white;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 120px;
+            line-height: 1.5;
+        }
+
+        .model-info {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+            font-style: italic;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            flex: 1;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .submit-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .submit-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .clear-btn {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .clear-btn:hover {
+            background: #e0e0e0;
+        }
+
+        .response-section {
+            margin-top: 30px;
+            display: none;
+        }
+
+        .response-section.show {
+            display: block;
+        }
+
+        .response-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .response-header h2 {
+            font-size: 18px;
+            color: #333;
+        }
+
+        .token-info {
+            font-size: 12px;
+            color: #666;
+            background: #f5f5f5;
+            padding: 6px 12px;
+            border-radius: 6px;
+        }
+
+        .response-box {
+            background: #f9f9f9;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            line-height: 1.6;
+            color: #333;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .error-box {
+            background: #fee;
+            border-color: #fcc;
+            color: #c33;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .model-badge {
+            display: inline-block;
+            font-size: 11px;
+            padding: 3px 8px;
+            background: #667eea;
+            color: white;
+            border-radius: 4px;
+            margin-left: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>AWS Bedrock Model Tester</h1>
+            <p>Test and interact with various AI models via AWS Bedrock</p>
+        </div>
+
+        <div class="content">
+            <form id="promptForm">
+                <div class="form-group">
+                    <label for="modelSelect">Select AI Model</label>
+                    <select id="modelSelect" required>
+                        <option value="">Loading models...</option>
+                    </select>
+                    <div class="model-info" id="modelInfo"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="promptText">Your Prompt</label>
+                    <textarea
+                        id="promptText"
+                        placeholder="Enter your prompt here... (e.g., 'Explain quantum computing in simple terms')"
+                        required
+                    ></textarea>
+                </div>
+
+                <div class="button-group">
+                    <button type="submit" class="submit-btn" id="submitBtn">
+                        Submit Prompt
+                    </button>
+                    <button type="button" class="clear-btn" id="clearBtn">
+                        Clear
+                    </button>
+                </div>
+            </form>
+
+            <div id="loading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Invoking model... Please wait.</p>
+            </div>
+
+            <div id="responseSection" class="response-section">
+                <div class="response-header">
+                    <h2>Response</h2>
+                    <div class="token-info" id="tokenInfo"></div>
+                </div>
+                <div id="responseBox" class="response-box"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '';
+        let models = [];
+
+        // Load available models on page load
+        async function loadModels() {
+            try {
+                const response = await fetch(`${API_BASE}/api/models`);
+                const data = await response.json();
+                models = data.models;
+
+                const select = document.getElementById('modelSelect');
+                select.innerHTML = '<option value="">-- Select a model --</option>';
+
+                models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.name;
+                    option.dataset.provider = model.provider;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading models:', error);
+                document.getElementById('modelSelect').innerHTML =
+                    '<option value="">Error loading models</option>';
+            }
+        }
+
+        // Update model info when selection changes
+        document.getElementById('modelSelect').addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const modelInfo = document.getElementById('modelInfo');
+
+            if (selectedOption.value) {
+                const provider = selectedOption.dataset.provider;
+                const modelId = selectedOption.value;
+                modelInfo.textContent = `Provider: ${provider} | Model ID: ${modelId}`;
+            } else {
+                modelInfo.textContent = '';
+            }
+        });
+
+        // Handle form submission
+        document.getElementById('promptForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const modelId = document.getElementById('modelSelect').value;
+            const prompt = document.getElementById('promptText').value;
+
+            if (!modelId || !prompt) {
+                alert('Please select a model and enter a prompt');
+                return;
+            }
+
+            // Show loading, hide response
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('responseSection').classList.remove('show');
+            document.getElementById('submitBtn').disabled = true;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/invoke`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model_id: modelId,
+                        prompt: prompt
+                    })
+                });
+
+                const data = await response.json();
+
+                // Hide loading
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('submitBtn').disabled = false;
+
+                // Show response
+                const responseSection = document.getElementById('responseSection');
+                const responseBox = document.getElementById('responseBox');
+                const tokenInfo = document.getElementById('tokenInfo');
+
+                responseSection.classList.add('show');
+
+                if (data.success) {
+                    responseBox.textContent = data.response;
+                    responseBox.classList.remove('error-box');
+
+                    const usage = data.usage;
+                    tokenInfo.textContent = `Tokens: ${usage.input_tokens} in / ${usage.output_tokens} out / ${usage.total_tokens} total`;
+                } else {
+                    responseBox.textContent = `Error: ${data.error}`;
+                    responseBox.classList.add('error-box');
+                    tokenInfo.textContent = '';
+                }
+
+                // Scroll to response
+                responseSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('submitBtn').disabled = false;
+
+                const responseSection = document.getElementById('responseSection');
+                const responseBox = document.getElementById('responseBox');
+                responseSection.classList.add('show');
+                responseBox.textContent = `Network Error: ${error.message}`;
+                responseBox.classList.add('error-box');
+                document.getElementById('tokenInfo').textContent = '';
+            }
+        });
+
+        // Clear button
+        document.getElementById('clearBtn').addEventListener('click', function() {
+            document.getElementById('promptText').value = '';
+            document.getElementById('responseSection').classList.remove('show');
+        });
+
+        // Load models on page load
+        loadModels();
+    </script>
+</body>
+</html>
