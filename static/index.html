@@ -281,7 +281,7 @@
                 models.forEach(model => {
                     const option = document.createElement('option');
                     option.value = model.id;
-                    option.textContent = model.name;
+                    option.textContent = model.provider + " - " + model.name;
                     option.dataset.provider = model.provider;
                     select.appendChild(option);
                 });

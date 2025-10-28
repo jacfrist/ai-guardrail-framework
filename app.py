@@ -41,11 +41,6 @@ AVAILABLE_MODELS = [
         'provider': 'Anthropic'
     },
     {
-        'id': 'us.anthropic.claude-3-5-haiku-20241022-v1:0',
-        'name': 'Claude 3.5 Haiku',
-        'provider': 'Anthropic'
-    },
-    {
         'id': 'anthropic.claude-3-sonnet-20240229-v1:0',
         'name': 'Claude 3 Sonnet',
         'provider': 'Anthropic'
@@ -66,13 +61,13 @@ AVAILABLE_MODELS = [
         'provider': 'Amazon'
     },
     {
-        'id': 'meta.llama3-1-70b-instruct-v1:0',
-        'name': 'Llama 3.1 70B Instruct',
+        'id': 'us.meta.llama4-maverick-17b-instruct-v1:0',
+        'name': 'Llama 4 Maverick',
         'provider': 'Meta'
     },
     {
-        'id': 'meta.llama3-1-8b-instruct-v1:0',
-        'name': 'Llama 3.1 8B Instruct',
+        'id': 'meta.llama3-70b-instruct-v1:0',
+        'name': 'Llama 3 70B Instruct',
         'provider': 'Meta'
     },
     {
@@ -96,13 +91,8 @@ AVAILABLE_MODELS = [
         'provider': 'OpenAI'
     },
     {
-        'id': 'deepseek.r1-v1:0',
+        'id': 'us.deepseek.r1-v1:0',
         'name': 'DeepSeek R1',
-        'provider': 'DeepSeek'
-    },
-    {
-        'id': 'deepseek.v3-v1:0',
-        'name': 'DeepSeek V3.1',
         'provider': 'DeepSeek'
     }
 ]
@@ -155,7 +145,33 @@ def invoke_model():
 
         # Extract the response text
         output_message = response['output']['message']
-        response_text = output_message['content'][0]['text']
+        content_blocks = output_message['content']
+
+        # Handle different content formats
+        response_text = ""
+        reasoning_text = ""
+
+        for content_block in content_blocks:
+            # Standard text response
+            if 'text' in content_block:
+                response_text = content_block['text']
+            # Reasoning content (models like DeepSeek R1)
+            elif 'reasoningContent' in content_block:
+                reasoning_data = content_block['reasoningContent']
+                if 'reasoningText' in reasoning_data and 'text' in reasoning_data['reasoningText']:
+                    reasoning_text = reasoning_data['reasoningText']['text']
+            # String content
+            elif isinstance(content_block, str):
+                response_text = content_block
+
+        # If we only got reasoning text and no response text, use reasoning as fallback
+        if not response_text and reasoning_text:
+            response_text = reasoning_text
+
+        # Debug: print the actual structure if we couldn't extract text
+        if not response_text:
+            print(f"Could not extract text for model {model_id}. Response: {content_blocks}")
+            response_text = str(content_blocks)
 
         # Get usage metrics
         usage = response.get('usage', {})
