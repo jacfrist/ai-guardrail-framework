@@ -15,7 +15,6 @@ CORS(app)
 # Initialize AWS Bedrock client
 def get_bedrock_client():
     """Create and return a Bedrock Runtime client with bearer token authentication."""
-    # Get the bearer token from environment
     bearer_token = os.getenv('AWS_BEARER_TOKEN_BEDROCK')
 
     if not bearer_token:
@@ -114,6 +113,7 @@ def invoke_model():
         data = request.get_json()
         model_id = data.get('model_id')
         prompt = data.get('prompt')
+        use_guardrails = data.get('use_guardrails', True)  # Default to True for safety
 
         if not model_id or not prompt:
             return jsonify({'error': 'model_id and prompt are required'}), 400
@@ -136,12 +136,32 @@ def invoke_model():
             'topP': 0.9
         }
 
-        # Invoke the model
-        response = client.converse(
-            modelId=model_id,
-            messages=messages,
-            inferenceConfig=inference_config
-        )
+        # Prepare converse parameters
+        converse_params = {
+            'modelId': model_id,
+            'messages': messages,
+            'inferenceConfig': inference_config
+        }
+
+        # Only add guardrail config if guardrails are enabled
+        if use_guardrails:
+            guardrail_config = {
+                'guardrailIdentifier': 'arn:aws:bedrock:us-east-1:211125590981:guardrail/3dbuzp5k6n9j',
+                'guardrailVersion': 'DRAFT',
+                'trace': 'enabled'  # Enable trace to get detailed guardrail information
+            }
+            converse_params['guardrailConfig'] = guardrail_config
+
+        # Invoke the model with or without guardrail protection
+        response = client.converse(**converse_params)
+
+        # Debug: Print full response structure to help diagnose trace issues
+        if use_guardrails:
+            print(f"Full response keys: {response.keys()}")
+            if 'trace' in response:
+                print(f"Trace found in response: {json.dumps(response['trace'], indent=2)}")
+            else:
+                print("No trace found in response")
 
         # Extract the response text
         output_message = response['output']['message']
@@ -176,16 +196,51 @@ def invoke_model():
         # Get usage metrics
         usage = response.get('usage', {})
 
-        return jsonify({
+        # Get guardrail trace information if available
+        guardrail_trace = response.get('trace')
+        guardrail_action = None
+        guardrail_details = None
+        output_trace = None
+
+        if guardrail_trace and 'guardrail' in guardrail_trace:
+            guardrail_info = guardrail_trace['guardrail']
+            guardrail_action = guardrail_info.get('action')
+
+            # Extract output trace specifically
+            if 'outputAssessments' in guardrail_info:
+                output_trace = guardrail_info['outputAssessments']
+
+            # Capture detailed trace information
+            guardrail_details = {
+                'action': guardrail_action,
+                'inputTrace': guardrail_info.get('inputAssessments'),
+                'outputTrace': output_trace,
+                'fullTrace': guardrail_info
+            }
+
+            # Log guardrail activity for debugging
+            if guardrail_action:
+                print(f"Guardrail triggered with action: {guardrail_action}")
+                print(f"Output trace: {json.dumps(output_trace, indent=2)}")
+                print(f"Full guardrail trace: {json.dumps(guardrail_info, indent=2)}")
+
+        result = {
             'success': True,
             'response': response_text,
             'model_id': model_id,
+            'guardrails_enabled': use_guardrails,
             'usage': {
                 'input_tokens': usage.get('inputTokens', 0),
                 'output_tokens': usage.get('outputTokens', 0),
                 'total_tokens': usage.get('totalTokens', 0)
             }
-        })
+        }
+
+        # Include guardrail information if it was triggered
+        if guardrail_details:
+            result['guardrail'] = guardrail_details
+
+        return jsonify(result)
 
     except ClientError as e:
         error_code = e.response['Error']['Code']
